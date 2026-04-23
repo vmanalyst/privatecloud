@@ -1,0 +1,71 @@
+Connect-VIServer "vcenter01.ash.local"
+
+$VMNames = Get-Content "C:\Scripts\pk_vmlist.txt"
+$LogFile = "C:\Scripts\PK_ForceEFI_Results.txt"
+
+Write-Host "Gathering VM data..." -ForegroundColor Yellow
+$TargetVMs = Get-VM | Where-Object { $VMNames -contains $_.Name }
+
+foreach ($VM in $TargetVMs) {
+
+    # --- FILTERS ---
+    $SkipReason = $null
+    if ($VM.ExtensionData.Config.Template) { $SkipReason = "Template" }
+    elseif ($VM.ExtensionData.Config.Firmware -ne "efi") { $SkipReason = "BIOS firmware — Force EFI Setup not applicable" }
+    if ($SkipReason) {
+        Write-Host "Skipping: $($VM.Name) [$SkipReason]" -ForegroundColor Gray
+        "$($VM.Name) - SKIPPED: $SkipReason" | Add-Content $LogFile
+        continue
+    }
+
+    # --- ALREADY SET ---
+    $CurrentValue = $VM.ExtensionData.Config.BootOptions.EnterBIOSSetup
+    if ($CurrentValue) {
+        Write-Host "Already set: $($VM.Name) [Force EFI Setup already enabled]" -ForegroundColor DarkGreen
+        "$($VM.Name) - SKIPPED: Already set" | Add-Content $LogFile
+        continue
+    }
+
+    # --- SHOW CHANGE SUMMARY ---
+    Write-Host "`n==========================================" -ForegroundColor White
+    Write-Host "Target VM: $($VM.Name)" -ForegroundColor Cyan
+    Write-Host "Action:    Enable Force EFI Setup on next boot"
+
+    $Confirm = Read-Host "Apply? (ENTER to confirm, 'S' to skip, Ctrl+C to stop)"
+    if ($Confirm -eq 's') {
+        Write-Host "Skipped by user." -ForegroundColor Yellow
+        "$($VM.Name) - SKIPPED: User choice" | Add-Content $LogFile
+        continue
+    }
+
+    # --- EXECUTION ---
+    try {
+        $bootSpec               = New-Object VMware.Vim.VirtualMachineConfigSpec
+        $bootOpt                = New-Object VMware.Vim.VirtualMachineBootOptions
+        $bootOpt.EnterBIOSSetup = $true
+        $bootSpec.BootOptions   = $bootOpt
+        $VM.ExtensionData.ReconfigVM($bootSpec)
+
+        Write-Host "VERIFYING..." -NoNewline
+        $Verify = (Get-VM $VM.Name).ExtensionData.Config.BootOptions.EnterBIOSSetup
+        if ($Verify) {
+            Write-Host " [OK] Force EFI Setup enabled successfully." -ForegroundColor Green
+            "$($VM.Name) - SUCCESS: Force EFI Setup enabled" | Add-Content $LogFile
+        } else {
+            Write-Host " [WARN] Flag not set after apply — check manually." -ForegroundColor Yellow
+            "$($VM.Name) - WARN: Could not verify" | Add-Content $LogFile
+        }
+
+    } catch {
+        Write-Host " [ERROR] $($_.Exception.Message)" -ForegroundColor Red
+        "$($VM.Name) - FAILED: $($_.Exception.Message)" | Add-Content $LogFile
+    }
+
+    # --- PAUSE BEFORE NEXT VM ---
+    Read-Host "`nPress ENTER to continue to next VM"
+}
+
+Write-Host "`n==========================================" -ForegroundColor White
+Write-Host "All VMs processed. Check log: $LogFile" -ForegroundColor Yellow
+
+Disconnect-VIServer * -Confirm:$false
