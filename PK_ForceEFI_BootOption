@@ -1,5 +1,4 @@
 Connect-VIServer "vcenter01.ash.local"
-
 $VMNames = Get-Content "C:\Scripts\pk_vmlist.txt"
 $LogFile = "C:\Scripts\PK_ForceEFI_Results.txt"
 
