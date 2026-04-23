@@ -1,0 +1,62 @@
+Connect-VIServer "vcenter01.ash.local"
+
+$VMNames = Get-Content "C:\Scripts\pk_vmlist.txt"
+$LogFile = "C:\Scripts\PK_VMX_Remove_Results.txt"
+
+Write-Host "Gathering VM data..." -ForegroundColor Yellow
+$TargetVMs = Get-VM | Where-Object { $VMNames -contains $_.Name }
+
+foreach ($VM in $TargetVMs) {
+
+    # --- FILTERS ---
+    $SkipReason = $null
+    $CurrentValue = $VM.ExtensionData.Config.ExtraConfig | 
+                    Where-Object { $_.Key -eq "uefi.allowAuthBypass" }
+    if (-not $CurrentValue) {
+        $SkipReason = "uefi.allowAuthBypass not present — already removed or never set"
+    }
+    if ($SkipReason) {
+        Write-Host "Skipping: $($VM.Name) [$SkipReason]" -ForegroundColor Gray
+        "$($VM.Name) - SKIPPED: $SkipReason" | Add-Content $LogFile
+        continue
+    }
+
+    # --- SHOW CHANGE SUMMARY ---
+    Write-Host "`n==========================================" -ForegroundColor White
+    Write-Host "Target VM:     $($VM.Name)" -ForegroundColor Cyan
+    Write-Host "Current Value: " -NoNewline; Write-Host $CurrentValue.Value -ForegroundColor Red
+    Write-Host "Action:        Remove uefi.allowAuthBypass from VMX"
+
+    $Confirm = Read-Host "Apply? (ENTER to confirm, 'S' to skip, Ctrl+C to stop)"
+    if ($Confirm -eq 's') {
+        Write-Host "Skipped by user." -ForegroundColor Yellow
+        "$($VM.Name) - SKIPPED: User choice" | Add-Content $LogFile
+        continue
+    }
+
+    # --- EXECUTION ---
+    try {
+        $spec      = New-Object VMware.Vim.VirtualMachineConfigSpec
+        $opt       = New-Object VMware.Vim.OptionValue
+        $opt.Key   = "uefi.allowAuthBypass"
+        $opt.Value = ""
+        $spec.ExtraConfig = @($opt)
+        $VM.ExtensionData.ReconfigVM($spec)
+
+        Write-Host "VERIFYING..." -NoNewline
+        $Verify = (Get-VM $VM.Name).ExtensionData.Config.ExtraConfig | 
+                  Where-Object { $_.Key -eq "uefi.allowAuthBypass" }
+        if (-not $Verify -or $Verify.Value -eq "") {
+            Write-Host " [OK] uefi.allowAuthBypass removed successfully." -ForegroundColor Green
+            "$($VM.Name) - SUCCESS: Parameter removed" | Add-Content $LogFile
+        } else {
+            Write-Host " [WARN] Parameter still present after remove — check manually." -ForegroundColor Yellow
+            "$($VM.Name) - WARN: Could not verify removal" | Add-Content $LogFile
+        }
+    } catch {
+        Write-Host " [ERROR] $($_.Exception.Message)" -ForegroundColor Red
+        "$($VM.Name) - FAILED: $($_.Exception.Message)" | Add-Content $LogFile
+    }
+}
+
+Disconnect-VIServer * -Confirm:$false
