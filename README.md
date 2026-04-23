@@ -1,2 +1,2 @@
 # privatecloud
-Public repo for common scripts
+Powercli public repo - VCF common scripts
