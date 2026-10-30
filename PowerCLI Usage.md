@@ -19,7 +19,7 @@ Install-Module -Name VCF.PowerCLI -Scope CurrentUser
 Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -ParticipateInCEIP $false -Scope User -Confirm:$false
 ```
 
-### No internet on the jump server? (common at banks)
+### No internet on the jump server? 
 
 On a machine **with** internet:
 
@@ -53,7 +53,7 @@ Connect-VIServer vcenter.company.local -User svc-automation@vsphere.local
 Disconnect-VIServer -Confirm:$false
 ```
 
-## 3. Look around
+## 3. Common Usage
 
 ```powershell
 # VMs: name, power, CPU, RAM, IP, folder
