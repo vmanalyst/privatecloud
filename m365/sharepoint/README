@@ -1,0 +1,14 @@
+# SharePoint Online scripts
+
+## Requirements
+- PowerShell 7
+- PnP.PowerShell module: `Install-Module PnP.PowerShell -Scope CurrentUser`
+- An Entra ID app registration for PnP (your own client ID)
+
+## Connect
+    Connect-PnPOnline -Url https://<tenant>.sharepoint.com/sites/<site> -ClientId $env:PNP_CLIENT_ID -Interactive
+
+## Scripts
+| Script | What it does |
+| --- | --- |
+| `Get-SiteReport.ps1` | lists sites with owner and storage used |
