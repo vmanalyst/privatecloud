@@ -6,6 +6,7 @@ variable "vms" {
     os           = optional(string, "ubuntu")
     folder       = optional(string, "Terraform-Dev")
     data_disk_gb = optional(number, 0)
+    os_disk_gb   = optional(number, 0)
   }))
 }
 
