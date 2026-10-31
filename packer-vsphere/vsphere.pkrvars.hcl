@@ -1,0 +1,5 @@
+datacenter = "DC1"
+cluster    = "Cluster01"
+datastore  = "Datastore01"
+folder     = "Templates"
+network    = "VM-1611-mgmt"

@@ -14,9 +14,13 @@ data "vsphere_datastore_cluster" "dsc" {
 
 locals {
   templates = {
-    ubuntu = "tpl-ubuntu-2404"
+    #ubuntu26 = "tpl-ubuntu-2604"
+    #ubuntu22 = "tpl-ubuntu-2204"
+    ubuntu = "tpl-ubuntu-2204"
+    rocky  = "tpl-rocky9"
     # centos  = "tpl-centos-9"
     # win2022 = "tpl-win2022"
+    # alma9 = "tpl-alma9"
   }
 
   networks = {

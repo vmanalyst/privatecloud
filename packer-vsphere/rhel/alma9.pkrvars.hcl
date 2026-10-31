@@ -1,0 +1,6 @@
+vm_name       = "tpl-alma9"
+guest_os_type = "rhel9_64Guest"
+iso_path      = "[nfs-iso] AlmaLinux-9-latest-x86_64-minimal.iso"
+baseos_url    = "https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os/"
+appstream_url = "https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/"
+build_ip      = "172.16.11.250"
