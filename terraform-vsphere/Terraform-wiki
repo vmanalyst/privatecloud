@@ -1,0 +1,80 @@
+# Terraform commands - cheat sheet
+
+Run everything from **inside** an environment folder (`dev/` or `prod/`).
+Check where you are first: `pwd`
+
+## Every session
+
+```bash
+cd /etc/ansible/terraform/dev      # or prod
+source ../env.sh                   # vCenter login (prompts for password)
+```
+
+## Core workflow
+
+```bash
+terraform init                     # first time in a folder, or after changing providers
+terraform plan -out=tfplan         # preview changes and save the plan - READ IT
+terraform apply tfplan             # do exactly what the saved plan says
+```
+
+## Day-to-day (edit terraform.tfvars, then plan + apply)
+
+| Task | Change in terraform.tfvars |
+| --- | --- |
+| Add a VM | add a line |
+| Resize CPU/RAM | change `size` |
+| Bigger OS disk | `os_disk_gb = 40` (grow only, never shrink) |
+| Extra data disk | `data_disk_gb = 50` |
+| Other VLAN | `vlan = 1619`  |
+| Other folder | `folder = "atm/Apps"` (must exist) |
+| Other OS | `os = "centos"` (template must exist) |
+| Decommission | delete the line |
+
+## Look around
+
+```bash
+terraform output                   # VM names and IPs
+terraform state list               # everything Terraform tracks in this folder
+terraform state show 'vsphere_virtual_machine.vm["dev-ubuntu-01"]'   # one VM in detail
+terraform show                     # everything, in full
+```
+
+## Check code without touching vCenter
+
+```bash
+terraform validate                 # check for mistakes
+```
+
+## Drift (someone changed a VM in vCenter)
+
+```bash
+terraform plan                     # differences show as ~
+```
+Then either `apply` to put it back, or update the code to match reality.
+
+## Protected VMs (prod)
+
+`prevent_destroy = true` in main.tf blocks any delete.
+To decommission a protected VM:
+1. comment out the `lifecycle` block
+2. remove the VM's line from terraform.tfvars
+3. `terraform plan -out=tfplan` - must show only that one destroy
+4. `terraform apply tfplan`
+5. put the `lifecycle` block back
+
+## Bring existing objects under Terraform (import)
+
+```bash
+# an existing tag
+terraform import vsphere_tag.prod '{"category_name": "Environment", "tag_name": "prod"}'
+```
+
+## Emergencies only
+
+```bash
+terraform plan -target='vsphere_virtual_machine.vm["dev-test-01"]'      # plan one VM
+terraform destroy -target='vsphere_virtual_machine.vm["dev-test-01"]'   # destroy one VM
+terraform destroy                                                       # destroy EVERYTHING in this folder
+```
+Normally remove the line from terraform.tfvars instead of using -target.
