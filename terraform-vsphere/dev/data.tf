@@ -14,9 +14,11 @@ data "vsphere_datastore_cluster" "dsc" {
 
 locals {
   templates = {
-    ubuntu = "tpl-ubuntu-2204"
-    ubuntu26 = "tpl-ubuntu-2604"
-    rocky  = "tpl-rocky9"
+    ubuntu        = "tpl-ubuntu-2204-2026-11-01"    # was tpl-ubuntu-2204 (deleted)
+    ubuntu26      = "tpl-ubuntu-2604-2026-11-01"    # was tpl-ubuntu-2604 (deleted)
+    #ubuntu22_2611 = "tpl-ubuntu-2204-2026-12-01"   # placeholder for future template
+    #ubuntu26_2611 = "tpl-ubuntu-2604-2027-11-01"   # placeholder for future template
+    rocky         = "tpl-rocky9-2026-11-01"         # was tpl-rocky9 (deleted)
     # centos  = "tpl-centos-9"
     # win2022 = "tpl-win2022"
     # alma9 = "tpl-alma9"

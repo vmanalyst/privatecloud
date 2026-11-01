@@ -3,6 +3,7 @@ locals {
     small  = { cpus = 1, memory = 2048 }
     medium = { cpus = 2, memory = 4096 }
     large  = { cpus = 4, memory = 8192 }
+    extra_large = { cpus = 8, memory = 12384 }
   }
 }
 
@@ -79,9 +80,14 @@ resource "vsphere_virtual_machine" "vm" {
 
   lifecycle {
     prevent_destroy = true
+    ignore_changes = [
+      clone[0].template_uuid,
+      guest_id,
+      firmware,
+      scsi_type,
+    ]
   }
 }
-
 output "vm_ips" {
   value = { for name, vm in vsphere_virtual_machine.vm : name => vm.default_ip_address }
 }

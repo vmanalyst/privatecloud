@@ -40,7 +40,7 @@ source "vsphere-iso" "linux" {
   datastore           = var.datastore
   folder              = var.folder
 
-  vm_name              = var.vm_name
+  vm_name              = "build-${var.vm_name}"
   guest_os_type        = var.guest_os_type
   firmware             = "efi"
   CPUs                 = 2
@@ -76,7 +76,11 @@ source "vsphere-iso" "linux" {
   ssh_timeout          = "30m"
   shutdown_command     = "sudo shutdown -P now"
 
-  convert_to_template = true
+  content_library_destination {
+    library = "DC1-Library-Template"
+    name    = "${var.vm_name}-${formatdate("YYYY-MM-DD", timestamp())}"
+    destroy = true
+  }
 }
 
 build {
