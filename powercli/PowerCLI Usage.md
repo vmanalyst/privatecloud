@@ -83,16 +83,15 @@ Get-Folder -Type VM | Where-Object Name -ne 'vm' | ForEach-Object {
 ## 4. Power
 
 ```powershell
-Start-VM         -VM web01 -Confirm:$false     # power on
-Shutdown-VMGuest -VM web01 -Confirm:$false     # clean OS shutdown (needs VMware Tools)
-Restart-VMGuest  -VM web01 -Confirm:$false     # clean OS restart
-Stop-VM          -VM web01 -Confirm:$false     # hard power off - last resort
+Get-VM new-app-01 | Stop-VMGuest -Confirm:$false      # clean OS shutdown, via VMware Tools
+Get-VM new-app-01 | Start-VM                          # power on
+Get-VM new-app-01 | Restart-VMGuest -Confirm:$false   # clean restart
 ```
 
 ## 5. Snapshots
 
 ```powershell
-New-Snapshot -VM web01 -Name "pre-patch" -Description "before monthly patches"
+Get-VM new-app-01 | New-Snapshot -Name "pre-patch" -Description "Before patching"
 
 # all snapshots, with age and size
 Get-VM | Get-Snapshot | Select-Object VM, Name, Created,
@@ -103,6 +102,9 @@ Get-VM | Get-Snapshot | Where-Object Created -lt (Get-Date).AddDays(-7)
 
 # remove one snapshot (check the name first!)
 Get-Snapshot -VM web01 -Name "pre-patch" | Remove-Snapshot -Confirm:$false
+
+#remove snapshots older than 7 days
+Get-VM | Get-Snapshot | Where-Object { $_.Created -lt (Get-Date).AddDays(-7) } | Remove-Snapshot -WhatIf
 ```
 
 ## 6. Move a VM to another folder
@@ -110,6 +112,44 @@ Get-Snapshot -VM web01 -Name "pre-patch" | Remove-Snapshot -Confirm:$false
 ```powershell
 $folder = Get-Folder -Name "Apps" -Location (Get-Folder -Name "Banking")
 Move-VM -VM web01 -InventoryLocation $folder
+```
+
+
+# 7. Networks
+
+```powershell
+**port groups on every host** 
+Get-VMHost | Where-Object ConnectionState -eq 'Connected' |
+  Get-VirtualPortGroup -Standard |
+  Select-Object VMHost, Name, VLanId, VirtualSwitchName |
+  Sort-Object Name, VMHost | Format-Table -AutoSize
+
+**Add a portgroup 1620 on every host** 
+Get-Cluster Cluster01 | Get-VMHost | Where-Object ConnectionState -eq 'Connected' |
+  Get-VirtualSwitch -Standard -Name vSwitch0 |
+  New-VirtualPortGroup -Name "VM-1620-test" -VLanId 1620 -WhatIf
+ 
+
+**Removing a portgroup 1620 on every host**  
+  Get-VirtualPortGroup -Name "VM-1620-test" | Remove-VirtualPortGroup -Confirm:$false -WhatIf
+
+  **the consistency check, a port group missing on some hosts**
+  $hosts = Get-VMHost | Where-Object ConnectionState -eq 'Connected'
+Get-VirtualPortGroup -VMHost $hosts -Standard | Group-Object Name |
+  Select-Object Name, Count, @{N='MissingOn';E={
+    ($hosts.Name | Where-Object { $_ -notin $_.Group.VMHost.Name }) -join ', ' }} |
+  Where-Object Count -lt $hosts.Count
+  
+  **VMkernel adapters, the host’s own IPs** (read-only)
+  Get-VMHost | Where-Object ConnectionState -eq 'Connected' |
+  Get-VMHostNetworkAdapter -VMKernel |
+  Select-Object VMHost, Name, IP, SubnetMask, PortGroupName, VMotionEnabled, ManagementTrafficEnabled |
+  Format-Table -AutoSize
+  
+  **which VM is on which network** (read-only)
+  Get-VM | Get-NetworkAdapter |
+  Select-Object @{N='VM';E={$_.Parent}}, Name, NetworkName, Type, MacAddress |
+  Sort-Object NetworkName | Format-Table -AutoSize
 ```
 
 ## 7. Tags
@@ -157,6 +197,11 @@ Use a service account for the task, never your own login.
 ## 11. Permissions and roles (audit exports)
 
 ```powershell
+# what a role can do
+
+Get-VIRole | Select-Object Name, IsSystem
+Get-VIPrivilege -Role (Get-VIRole -Name "Admin") | Measure-Object
+
 # ALL permissions in vCenter: who, which role, on what, does it propagate
 Get-VIPermission | Select-Object @{N='Object';E={$_.Entity.Name}},
     @{N='ObjectType';E={$_.EntityId.Split('-')[0]}},
@@ -166,6 +211,9 @@ Get-VIPermission | Select-Object @{N='Object';E={$_.Entity.Name}},
 # permissions on one folder
 Get-VIPermission -Entity (Get-Folder -Name "Banking") |
     Select-Object Principal, Role, Propagate, IsGroup
+
+# who has access to what
+Get-VIPermission | Select-Object Entity, Principal, Role, Propagate | Sort-Object Principal
 
 # who has access to one VM
 Get-VIPermission -Entity (Get-VM web01) | Select-Object Principal, Role, Propagate
@@ -250,10 +298,32 @@ Get-VMHost esx01 | Get-ScsiLun -LunType disk | Select-Object CanonicalName,
 Get-VMHost esx01 | Get-ScsiLun -LunType disk | Get-ScsiLunPath |
     Select-Object @{N='LUN';E={$_.ScsiLun.CanonicalName}}, Name, State, Preferred
 
+# Check multipath policy
+Get-VMHost | Where-Object ConnectionState -eq 'Connected' |
+  Get-ScsiLun -LunType disk |
+  Select-Object VMHost, CanonicalName, CapacityGB, MultipathPolicy
+
 # DEAD paths only - the one to run when storage misbehaves
 Get-VMHost | Get-ScsiLun -LunType disk | Get-ScsiLunPath | Where-Object State -eq 'Dead' |
     Select-Object @{N='Host';E={$_.ScsiLun.VMHost.Name}},
         @{N='LUN';E={$_.ScsiLun.CanonicalName}}, Name
+
+# how mamy path each lun has
+Get-VMHost | Where-Object ConnectionState -eq 'Connected'| ForEach-Object {
+  $h = $_
+  Get-ScsiLun -VmHost $h -LunType disk | Where-Object CanonicalName -like 'naa.*' | ForEach-Object {
+    $paths = Get-ScsiLunPath -ScsiLun $_
+    [pscustomobject]@{
+      Host   = $h.Name
+      LUN    = $_.CanonicalName
+      Policy = $_.MultipathPolicy
+      Paths  = $paths.Count
+      Active = ($paths | Where-Object State -eq 'Active').Count
+      Dead   = ($paths | Where-Object State -eq 'Dead').Count
+    }
+  }
+} | Format-Table -AutoSize
+
 
 # set Round Robin on LUNs that aren't (check your array vendor's recommendation first)
 Get-VMHost esx01 | Get-ScsiLun -LunType disk | Where-Object MultipathPolicy -ne 'RoundRobin' |
